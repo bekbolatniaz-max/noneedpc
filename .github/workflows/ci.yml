@@ -20,3 +20,13 @@ jobs:
       - run: python -m ruff check server
       - run: python -m pytest -q -m "not windows"
       - run: python .verify/secret_scan.py --all
+
+  pwa:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: for f in pwa/js/*.js; do node --check "$f"; done
+      - run: node --test pwa/tests/*.test.mjs

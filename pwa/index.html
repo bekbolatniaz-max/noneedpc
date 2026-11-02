@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Nitro Pad">
+  <meta name="theme-color" content="#0b0d12">
+  <title>Nitro Pad</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Сопряжение -->
+  <section id="screen-pair" class="screen" hidden>
+    <div class="card">
+      <h1>Nitro Pad</h1>
+      <p class="muted">Введи 6-значный код с экрана ноутбука</p>
+      <form id="pair-form" autocomplete="off">
+        <input id="pair-code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="000000" aria-label="Код сопряжения">
+        <button type="submit" class="primary">Подключить</button>
+      </form>
+      <p id="pair-error" class="error" role="alert"></p>
+    </div>
+  </section>
+
+  <!-- Фатальная ошибка (версия протокола и т. п.) -->
+  <section id="screen-fatal" class="screen" hidden>
+    <div class="card">
+      <h1>Nitro Pad</h1>
+      <p id="fatal-text" class="error"></p>
+      <button id="fatal-retry" class="primary">Попробовать снова</button>
+    </div>
+  </section>
+
+  <!-- Геймпад -->
+  <section id="screen-pad" class="screen pad" hidden>
+    <div class="rotate-hint">Поверни телефон горизонтально</div>
+
+    <div class="pad-top">
+      <div class="shoulders left">
+        <div class="trig" data-trigger="lt">LT</div>
+        <div class="bump" data-btn="LB">LB</div>
+      </div>
+      <button id="menu-btn" class="status" aria-label="Меню">
+        <span id="status-dot" class="dot"></span>
+        <span id="status-text">…</span>
+        <span id="rtt-text" class="rtt"></span>
+      </button>
+      <div class="shoulders right">
+        <div class="bump" data-btn="RB">RB</div>
+        <div class="trig" data-trigger="rt">RT</div>
+      </div>
+    </div>
+
+    <div id="pad-area" class="pad-area">
+      <div class="col left">
+        <div class="stick" data-stick="left"><div class="knob"></div></div>
+        <div class="dpad" data-dpad>
+          <div class="arm up" data-arm="UP"></div>
+          <div class="arm down" data-arm="DOWN"></div>
+          <div class="arm left" data-arm="LEFT"></div>
+          <div class="arm right" data-arm="RIGHT"></div>
+        </div>
+      </div>
+
+      <div class="col center">
+        <div class="sys">
+          <div class="small" data-btn="SELECT">⧉</div>
+          <div class="small home" data-btn="HOME">⌂</div>
+          <div class="small" data-btn="START">☰</div>
+        </div>
+        <div class="sys">
+          <div class="small" data-btn="L3">L3</div>
+          <div class="small" data-btn="R3">R3</div>
+        </div>
+      </div>
+
+      <div class="col right">
+        <div class="abxy">
+          <div class="face y" data-btn="Y">Y</div>
+          <div class="face x" data-btn="X">X</div>
+          <div class="face b" data-btn="B">B</div>
+          <div class="face a" data-btn="A">A</div>
+        </div>
+        <div class="stick" data-stick="right"><div class="knob"></div></div>
+      </div>
+    </div>
+    <div id="rumble-flash" class="rumble-flash"></div>
+  </section>
+
+  <!-- Меню: игры, режим приставки -->
+  <section id="menu" class="menu" hidden>
+    <div class="menu-head">
+      <button id="console-btn" class="primary">Приставка: …</button>
+      <span id="console-msg" class="muted"></span>
+      <button id="menu-close" class="ghost" aria-label="Закрыть">✕</button>
+    </div>
+    <div id="games" class="games"></div>
+    <p id="games-msg" class="muted"></p>
+    <template id="game-tpl">
+      <button class="game">
+        <div class="cover"><img alt=""></div>
+        <div class="title"></div>
+      </button>
+    </template>
+  </section>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
