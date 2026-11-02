@@ -121,13 +121,15 @@ function startPad() {
   if (conn) conn.stop();
   conn = new Connection(getToken(), { platform: platform(), name: deviceName() }, {
     onStatus: setStatus,
-    onWelcome: () => {},
+    // Переподключение = новое виртуальное устройство: номер игрока может стать другим.
+    onWelcome: () => { playerNumber = null; },
     onStats: ({ rtt, serverRtt }) => {
       const v = rtt ?? serverRtt;
       if (v !== null && v !== undefined) $('rtt-text').textContent = `${Math.round(v)} мс`;
     },
     onEvent: (name, data) => {
       if (name === 'console_mode') renderConsole(data.state);
+      if (name === 'devices' && !$('menu').hidden) loadPlayers();
       if (name === 'player' && Number.isInteger(data.number)) {
         playerNumber = data.number;
         setStatus('online', `Игрок ${playerNumber}`);
@@ -238,8 +240,8 @@ async function loadPlayers() {
     const { devices } = await api.devices();
     const names = devices.filter((d) => d.slot !== null).map((d) => d.name);
     $('players').textContent = names.length ? `Подключены: ${names.join(', ')}` : '';
-  } catch {
-    $('players').textContent = '';
+  } catch (e) {
+    $('players').textContent = `Список игроков недоступен: ${e.message}`;
   }
 }
 

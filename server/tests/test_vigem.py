@@ -87,6 +87,18 @@ def test_player_number_from_led_notification(vg: SimpleNamespace) -> None:
     assert out.player_number(0) is None
 
 
+def test_register_failure_rolls_back(vg: SimpleNamespace) -> None:
+    class NoNotify(FakePad):
+        def register_notification(self, callback_function: Any) -> None:
+            raise OSError("notify failed")
+
+    vg.VX360Gamepad = NoNotify
+    out = VigemOutput(vg)
+    with pytest.raises(OSError):
+        out.open(0)
+    assert out._pads == {} and out._callbacks == {} and out.player_number(0) is None
+
+
 def test_rumble_callback_reaches_router(vg: SimpleNamespace) -> None:
     out = VigemOutput(vg)
     router = InputRouter(out, max_slots=2)
