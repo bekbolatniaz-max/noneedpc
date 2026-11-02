@@ -41,6 +41,18 @@ export class PadControls {
     root.addEventListener('pointerup', (e) => this._up(e), { passive: true });
     root.addEventListener('pointercancel', (e) => this._up(e), { passive: true });
     root.addEventListener('contextmenu', (e) => e.preventDefault());
+    // iOS Safari игнорирует user-scalable=no и не всегда соблюдает touch-action: двойное касание
+    // масштабирует экран, а браузер забирает палец себе (pointercancel = кнопка «отпускается»).
+    // Гасим жесты на touch-событиях; Pointer Events при этом приходят как обычно.
+    // Настоящие <button> (меню) не трогаем — иначе у них пропадёт click.
+    const block = (e) => { if (!e.target.closest('button')) e.preventDefault(); };
+    for (const type of ['touchstart', 'touchmove', 'touchend']) {
+      root.addEventListener(type, block, { passive: false });
+    }
+    // Щипок в Safari (нестандартные gesture*-события) и двойной клик.
+    for (const type of ['gesturestart', 'gesturechange', 'dblclick']) {
+      root.addEventListener(type, (e) => e.preventDefault(), { passive: false });
+    }
   }
 
   /** Отпустить всё (потеря фокуса, сворачивание). */
