@@ -7,7 +7,8 @@ from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
-from fastapi import Depends, FastAPI, Header, Path as PathParam, Request
+from fastapi import Depends, FastAPI, Header, Request
+from fastapi import Path as PathParam
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
