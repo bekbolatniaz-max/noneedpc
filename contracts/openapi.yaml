@@ -1,0 +1,410 @@
+openapi: 3.1.0
+info:
+  title: Nitro Console API
+  version: "1"
+  description: |
+    HTTP-часть протокола v1. Бинарные WS-кадры — contracts/protocol.md,
+    текстовые WS-сообщения — contracts/ws-messages.schema.json.
+    Клиент обязан игнорировать неизвестные поля ответа; сервер не добавляет
+    поля без обновления этого файла.
+servers:
+  - url: http://{host}:8765/api/v1
+    variables:
+      host:
+        default: 127.0.0.1
+security:
+  - bearer: []
+paths:
+  /info:
+    get:
+      security: []
+      summary: Версия протокола, возможности и feature flags
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Info" }
+  /pair:
+    post:
+      security: []
+      summary: Обмен одноразового кода на токен
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PairRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PairResponse" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+  /games:
+    get:
+      summary: Установленные игры
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GameList" }
+        "401": { $ref: "#/components/responses/Error" }
+  /games/{appid}/cover:
+    get:
+      summary: Обложка игры
+      parameters:
+        - { $ref: "#/components/parameters/AppId" }
+      responses:
+        "200":
+          description: Изображение
+          content:
+            image/jpeg: {}
+            image/png: {}
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /games/{appid}/launch:
+    post:
+      summary: Запустить игру через Steam
+      parameters:
+        - { $ref: "#/components/parameters/AppId" }
+      responses:
+        "202":
+          description: Запуск начат
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LaunchResponse" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /console-mode:
+    get:
+      summary: Состояние режима приставки
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConsoleMode" }
+        "401": { $ref: "#/components/responses/Error" }
+    post:
+      summary: Включить или выключить режим приставки
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConsoleModeRequest" }
+      responses:
+        "202":
+          description: Переключение начато
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConsoleMode" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /system:
+    get:
+      summary: Громкость
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SystemState" }
+        "401": { $ref: "#/components/responses/Error" }
+  /system/volume:
+    post:
+      summary: Установить громкость
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/VolumeRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SystemState" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+  /system/power:
+    post:
+      summary: Сон, перезагрузка или выключение (только с confirm=true)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PowerRequest" }
+      responses:
+        "202":
+          description: Принято
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PowerResponse" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+  /devices:
+    get:
+      summary: Устройства ввода
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DeviceList" }
+        "401": { $ref: "#/components/responses/Error" }
+  /storage:
+    get:
+      summary: Диски и библиотеки Steam
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StorageList" }
+        "401": { $ref: "#/components/responses/Error" }
+
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+  parameters:
+    AppId:
+      name: appid
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1 }
+  responses:
+    Error:
+      description: Ошибка
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+  schemas:
+    Error:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum: [bad_request, unauthorized, forbidden, not_found, conflict, rate_limited, internal]
+            message: { type: string }
+
+    Info:
+      type: object
+      additionalProperties: false
+      required: [name, server_version, protocol_version, mock, capabilities, features]
+      properties:
+        name: { type: string, description: "Имя экземпляра из config (instance.name)" }
+        server_version: { type: string }
+        protocol_version: { type: integer, const: 1 }
+        mock: { type: boolean, description: "true — мок-сервер без драйвера и Steam" }
+        capabilities: { $ref: "#/components/schemas/Capabilities" }
+        features: { $ref: "#/components/schemas/Features" }
+
+    Capabilities:
+      type: object
+      additionalProperties: false
+      required: [output_backends, active_backend, max_slots, deadman_ms, send_hz, rumble]
+      properties:
+        output_backends:
+          type: array
+          items: { $ref: "#/components/schemas/OutputBackendInfo" }
+        active_backend: { type: string }
+        max_slots: { type: integer, minimum: 1, maximum: 4 }
+        deadman_ms: { type: integer, minimum: 50 }
+        send_hz: { type: integer, minimum: 1 }
+        rumble: { type: boolean, description: "Сервер умеет пересылать вибрацию" }
+
+    OutputBackendInfo:
+      type: object
+      additionalProperties: false
+      required: [id, title, available, analog]
+      properties:
+        id: { type: string, examples: [vigem, kbm, mock] }
+        title: { type: string }
+        available: { type: boolean, description: "Драйвер/зависимости на месте" }
+        analog: { type: boolean, description: "Аналоговые стики и триггеры" }
+
+    Features:
+      type: object
+      description: Feature flags. Неизвестные клиенту флаги игнорируются.
+      additionalProperties: { type: boolean }
+      required: [games, launch, console_mode, system, devices, storage, rumble, backend_select]
+      properties:
+        games: { type: boolean }
+        launch: { type: boolean }
+        console_mode: { type: boolean }
+        system: { type: boolean }
+        devices: { type: boolean }
+        storage: { type: boolean }
+        rumble: { type: boolean }
+        backend_select: { type: boolean }
+
+    PairRequest:
+      type: object
+      additionalProperties: false
+      required: [code]
+      properties:
+        code: { type: string, pattern: "^[0-9]{6}$" }
+        device_name: { type: string, maxLength: 64 }
+
+    PairResponse:
+      type: object
+      additionalProperties: false
+      required: [token, device_id]
+      properties:
+        token: { type: string, minLength: 32 }
+        device_id: { type: string }
+
+    Game:
+      type: object
+      additionalProperties: false
+      required: [appid, name, library_id, size_bytes, available, has_cover]
+      properties:
+        appid: { type: integer, minimum: 1 }
+        name: { type: string }
+        library_id: { type: string, description: "id из StorageList.volumes[].libraries[]" }
+        size_bytes: { type: integer, minimum: 0 }
+        available: { type: boolean, description: "false — диск с игрой отключён" }
+        has_cover: { type: boolean }
+
+    GameList:
+      type: object
+      additionalProperties: false
+      required: [games]
+      properties:
+        games:
+          type: array
+          items: { $ref: "#/components/schemas/Game" }
+
+    LaunchResponse:
+      type: object
+      additionalProperties: false
+      required: [appid, status]
+      properties:
+        appid: { type: integer }
+        status: { type: string, enum: [launching] }
+
+    ConsoleMode:
+      type: object
+      additionalProperties: false
+      required: [state, display_profile]
+      properties:
+        state: { type: string, enum: ["off", "on", "switching", "error"] }
+        display_profile:
+          type: ["string", "null"]
+          description: "Имя профиля дисплея (config/displays), null если ТВ не подключён"
+        message: { type: string }
+
+    ConsoleModeRequest:
+      type: object
+      additionalProperties: false
+      required: [state]
+      properties:
+        state: { type: string, enum: ["on", "off"] }
+
+    SystemState:
+      type: object
+      additionalProperties: false
+      required: [volume, muted]
+      properties:
+        volume: { type: integer, minimum: 0, maximum: 100 }
+        muted: { type: boolean }
+
+    VolumeRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        volume: { type: integer, minimum: 0, maximum: 100 }
+        muted: { type: boolean }
+
+    PowerRequest:
+      type: object
+      additionalProperties: false
+      required: [action, confirm]
+      properties:
+        action: { type: string, enum: [sleep, restart, shutdown] }
+        confirm: { type: boolean, const: true }
+
+    PowerResponse:
+      type: object
+      additionalProperties: false
+      required: [action, status]
+      properties:
+        action: { type: string, enum: [sleep, restart, shutdown] }
+        status: { type: string, enum: [accepted] }
+
+    Device:
+      type: object
+      additionalProperties: false
+      required: [id, kind, name, slot, mode, capabilities]
+      properties:
+        id: { type: string }
+        kind: { type: string, description: "Тип источника: pwa, physical_pad, … (UI не зашивает список)" }
+        name: { type: string }
+        slot: { type: ["integer", "null"], minimum: 0, maximum: 3 }
+        mode: { type: string, enum: [route, observe], description: "observe — только отображаем, Steam видит устройство сам" }
+        capabilities:
+          type: array
+          items: { type: string }
+          description: "Например analog, rumble, gyro"
+
+    DeviceList:
+      type: object
+      additionalProperties: false
+      required: [devices]
+      properties:
+        devices:
+          type: array
+          items: { $ref: "#/components/schemas/Device" }
+
+    SteamLibrary:
+      type: object
+      additionalProperties: false
+      required: [id, path, game_count, size_bytes]
+      properties:
+        id: { type: string }
+        path: { type: string }
+        game_count: { type: integer, minimum: 0 }
+        size_bytes: { type: integer, minimum: 0 }
+
+    Volume:
+      type: object
+      additionalProperties: false
+      required: [id, kind, label, mount, total_bytes, free_bytes, available, low_space, libraries]
+      properties:
+        id: { type: string }
+        kind: { type: string, description: "internal, external, network, … (UI не зашивает список)" }
+        label: { type: string }
+        mount: { type: string }
+        total_bytes: { type: integer, minimum: 0 }
+        free_bytes: { type: integer, minimum: 0 }
+        available: { type: boolean }
+        low_space: { type: boolean }
+        libraries:
+          type: array
+          items: { $ref: "#/components/schemas/SteamLibrary" }
+
+    StorageList:
+      type: object
+      additionalProperties: false
+      required: [volumes]
+      properties:
+        volumes:
+          type: array
+          items: { $ref: "#/components/schemas/Volume" }

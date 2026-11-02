@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nitro-console.local/contracts/ws-messages.schema.json",
+  "title": "Nitro Console WS text messages v1",
+  "description": "Текстовые кадры WebSocket /ws. Бинарные кадры — contracts/protocol.md.",
+  "oneOf": [
+    { "$ref": "#/$defs/hello" },
+    { "$ref": "#/$defs/welcome" },
+    { "$ref": "#/$defs/error" },
+    { "$ref": "#/$defs/stats" },
+    { "$ref": "#/$defs/event" }
+  ],
+  "$defs": {
+    "hello": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "token", "protocol_version"],
+      "properties": {
+        "type": { "const": "hello" },
+        "token": { "type": "string" },
+        "protocol_version": { "type": "integer" },
+        "client": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "platform": { "type": "string", "maxLength": 32 },
+            "name": { "type": "string", "maxLength": 64 }
+          }
+        }
+      }
+    },
+    "welcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "protocol_version", "slot", "session_id", "deadman_ms", "send_hz", "capabilities"],
+      "properties": {
+        "type": { "const": "welcome" },
+        "protocol_version": { "const": 1 },
+        "slot": { "type": "integer", "minimum": 0, "maximum": 3 },
+        "session_id": { "type": "string" },
+        "deadman_ms": { "type": "integer", "minimum": 50 },
+        "send_hz": { "type": "integer", "minimum": 1 },
+        "capabilities": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["rumble", "active_backend"],
+          "properties": {
+            "rumble": { "type": "boolean" },
+            "active_backend": { "type": "string" }
+          }
+        }
+      }
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "code", "message"],
+      "properties": {
+        "type": { "const": "error" },
+        "code": { "enum": ["auth_failed", "protocol_mismatch", "no_free_slot", "bad_message", "timeout"] },
+        "message": { "type": "string" }
+      }
+    },
+    "stats": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "rtt_ms", "last_seq", "dropped"],
+      "properties": {
+        "type": { "const": "stats" },
+        "rtt_ms": { "type": ["number", "null"], "minimum": 0 },
+        "last_seq": { "type": ["integer", "null"], "minimum": 0, "maximum": 65535 },
+        "dropped": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "name", "data"],
+      "properties": {
+        "type": { "const": "event" },
+        "name": { "enum": ["console_mode", "launch", "devices", "storage"] },
+        "data": { "type": "object" }
+      }
+    }
+  }
+}

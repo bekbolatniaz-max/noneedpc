@@ -1,0 +1,34 @@
+# личное — у каждого свой экземпляр
+config/local.yaml
+config/displays/local-*.yaml
+*.local.yaml
+.env
+.env.*
+*.pem
+*.key
+*.crt
+secrets/
+data/
+
+# python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+*.egg-info/
+
+# node / playwright (pwa)
+node_modules/
+test-results/
+playwright-report/
+
+# verify: вердикты Codex остаются локально
+.verify/out/
+
+# os / ide
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

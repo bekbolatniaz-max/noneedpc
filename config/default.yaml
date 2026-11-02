@@ -1,0 +1,27 @@
+# Настройки по умолчанию (в git). Своё — в config/local.yaml (в .gitignore), те же ключи.
+
+instance:
+  name: "Nitro Console"
+
+server:
+  host: 127.0.0.1        # для телефона в той же Wi-Fi: 0.0.0.0 в local.yaml
+  port: 8765
+  serve_pwa: true        # раздавать pwa/ с того же origin
+  pwa_dir: null          # null = <repo>/pwa
+
+input:
+  deadman_ms: 250
+  send_hz: 60
+  max_slots: 4
+  hello_timeout_s: 5
+
+output:
+  backend: vigem         # vigem | kbm | mock
+
+pairing:
+  code_ttl_s: 300
+  max_attempts: 5
+
+storage:
+  provider: windows_volumes
+  low_space_gb: 20
