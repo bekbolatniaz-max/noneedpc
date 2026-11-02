@@ -2,17 +2,19 @@
 
 import hashlib
 import hmac
+import json
 import secrets
 import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 
 
 class PairingError(Exception):
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
-        self.code = code  # forbidden | rate_limited
+        self.code = code  # forbidden | rate_limited | internal
         self.message = message
 
 
@@ -36,9 +38,11 @@ class PairingService:
         fixed_code: str | None = None,
         clock: Callable[[], float] = time.monotonic,
         on_new_code: Callable[[str], None] | None = None,
+        store_path: Path | None = None,
     ) -> None:
         """fixed_code — только для мок-сервера: постоянный многоразовый код для тестов PWA.
-        on_new_code — показать новый код (консоль, QR на ТВ); вызывается при каждой смене."""
+        on_new_code — показать новый код (консоль, QR на ТВ); вызывается при каждой смене.
+        store_path — файл сопряжённых устройств (только хэши токенов), переживает перезапуск."""
         self._on_new_code = on_new_code
         self._ttl = code_ttl_s
         self._max_attempts = max_attempts
@@ -48,6 +52,12 @@ class PairingService:
         self._expires = 0.0
         self._attempts = 0
         self._devices: dict[str, PairedDevice] = {}
+        self._store = store_path
+        if store_path is not None and store_path.is_file():
+            for item in json.loads(store_path.read_text(encoding="utf-8")):
+                self._devices[item["device_id"]] = PairedDevice(
+                    item["device_id"], item.get("name", ""), item["token_hash"]
+                )
         # Синхронные HTTP-обработчики FastAPI идут в пуле потоков: проверка и погашение кода атомарны.
         self._lock = threading.RLock()
 
@@ -88,8 +98,24 @@ class PairingService:
             self._rotate()  # одноразовый: сразу новый код для следующего телефона
         token = secrets.token_urlsafe(32)
         device_id = secrets.token_hex(8)
-        self._devices[device_id] = PairedDevice(device_id, device_name[:64], _hash(token))
+        devices = {**self._devices, device_id: PairedDevice(device_id, device_name[:64], _hash(token))}
+        self._save(devices)  # сначала файл: при ошибке записи память не меняется
+        self._devices = devices
         return token, device_id
+
+    def _save(self, devices: dict[str, PairedDevice]) -> None:
+        if self._store is None:
+            return
+        try:
+            self._store.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self._store.with_suffix(".tmp")
+            tmp.write_text(json.dumps([
+                {"device_id": d.device_id, "name": d.name, "token_hash": d.token_hash}
+                for d in devices.values()
+            ], ensure_ascii=False, indent=1), encoding="utf-8")
+            tmp.replace(self._store)
+        except OSError as e:
+            raise PairingError("internal", f"не удалось сохранить сопряжение: {e.strerror or e}") from e
 
     def verify(self, token: str | None) -> PairedDevice | None:
         if not token:
@@ -104,4 +130,6 @@ class PairingService:
 
     def revoke(self, device_id: str) -> None:
         with self._lock:
-            self._devices.pop(device_id, None)
+            devices = {k: v for k, v in self._devices.items() if k != device_id}
+            self._save(devices)
+            self._devices = devices

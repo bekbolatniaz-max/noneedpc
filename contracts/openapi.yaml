@@ -43,6 +43,7 @@ paths:
         "400": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Error" }
         "429": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
   /games:
     get:
       summary: Установленные игры
@@ -110,7 +111,7 @@ paths:
         "409": { $ref: "#/components/responses/Error" }
   /system:
     get:
-      summary: Громкость
+      summary: Громкость (404, если features.system = false)
       responses:
         "200":
           description: OK
@@ -118,6 +119,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/SystemState" }
         "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
   /system/volume:
     post:
       summary: Установить громкость
@@ -134,6 +136,7 @@ paths:
               schema: { $ref: "#/components/schemas/SystemState" }
         "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
   /system/power:
     post:
       summary: Сон, перезагрузка или выключение (только с confirm=true)
@@ -150,6 +153,7 @@ paths:
               schema: { $ref: "#/components/schemas/PowerResponse" }
         "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
   /devices:
     get:
       summary: Устройства ввода
