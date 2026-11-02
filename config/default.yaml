@@ -23,5 +23,12 @@ pairing:
   max_attempts: 5
 
 storage:
-  provider: windows_volumes
+  provider: steam_volumes
   low_space_gb: 20
+
+steam:
+  path: null             # null = из реестра (HKCU\Software\Valve\Steam\SteamPath)
+  hide_appids: []        # appid, которые не показывать в лаунчере
+
+console_mode:
+  dry_run: true          # true = скрипт только показывает план; false — после проверки лидером

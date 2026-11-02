@@ -27,13 +27,13 @@ def test_core_does_not_import_plugins_or_mock(path: Path) -> None:
 
 def test_registry_rejects_wrong_kind_and_duplicates() -> None:
     reg = register_builtin(Registry())
-    assert set(reg.all("output")) == {"mock"}
+    assert set(reg.all("output")) == {"vigem", "mock"}
     with pytest.raises(ValueError):
         reg.register("output", reg.get("output", "mock"))
     with pytest.raises(TypeError):
         reg.register("storage", reg.get("output", "mock"))
     with pytest.raises(KeyError):
-        reg.get("output", "vigem")
+        reg.get("output", "kbm")
 
 
 def test_new_output_plugin_needs_no_core_changes() -> None:

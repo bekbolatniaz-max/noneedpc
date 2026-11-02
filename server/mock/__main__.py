@@ -3,22 +3,12 @@
 import argparse
 import logging
 import re
-import socket
 
 import uvicorn
 
 from server.app import create_app
 from server.mock.build import build_mock_context
-
-
-def _lan_ip() -> str:
-    # Без отправки пакетов: UDP connect только выбирает исходящий интерфейс.
-    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-        try:
-            s.connect(("10.255.255.255", 1))
-            return s.getsockname()[0]
-        except OSError:
-            return "127.0.0.1"
+from server.net import lan_ip
 
 
 def main() -> None:
@@ -40,7 +30,7 @@ def main() -> None:
     ctx = build_mock_context(pair_code=args.pair_code, on_new_code=show_code, overrides=overrides)
     host = args.host or ctx.config["server"]["host"]
     port = args.port or ctx.config["server"]["port"]
-    shown = _lan_ip() if host == "0.0.0.0" else host
+    shown = lan_ip() if host == "0.0.0.0" else host
 
     print(f"\n  Nitro Console MOCK  http://{shown}:{port}/")
     print("  API: /api/v1/info   WS: /ws")

@@ -83,6 +83,9 @@ def create_app(ctx: AppContext) -> FastAPI:
         finally:
             for source in ctx.inputs:
                 await source.stop()
+            aclose = getattr(ctx.console_mode, "aclose", None)
+            if aclose is not None:
+                await aclose()
             deadman.cancel()
             ctx.router.backend.shutdown()
 
