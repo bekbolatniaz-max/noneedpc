@@ -4,7 +4,7 @@
 
 ## Зоны
 - Лидер: `server/`, `contracts/`, `scripts/`, `config/`, `.verify/`, `docs/architecture.md`, `docs/protocol.md`.
-- Друг: `pwa/`, `docs/ui.md`. Изменения API — issue с меткой `contract-change`.
+- Друг: `pwa/`, `docs/ui.md`. Изменения API — issue с меткой `contract-change`. PWA M1 написал лидер (D-007); с M2 `pwa/` ведёт друг.
 - Контракт (`contracts/`) первичен; мок-сервер (`server/mock/`) обязан ему соответствовать.
 
 ## Правила
