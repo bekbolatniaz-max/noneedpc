@@ -96,6 +96,7 @@ class _Session:
         self._ping_id = 0
         self._send_lock = asyncio.Lock()
         self._tasks: set[asyncio.Task[Any]] = set()
+        self._player_watch: asyncio.Task[None] | None = None
         self._closed = False
 
     # --- отправка (из нескольких задач, поэтому под замком) ---
@@ -220,7 +221,25 @@ class _Session:
             },
         })
         log.info("подключён %s, слот %d", name, slot)
+        self._player_watch = asyncio.create_task(self._watch_player(slot))
+        self._player_watch.add_done_callback(self._on_send_done)
+        await self.ctx.bus.publish("devices", {})
         return True
+
+    async def _watch_player(self, slot: int) -> None:
+        """Номер игрока ОС назначает не сразу и может поменять — следим всё время соединения.
+
+        Опрос дешёвый (чтение dict), поэтому проще и надёжнее, чем отдельный канал событий от бэкенда.
+        """
+        backend = self.ctx.router.backend
+        sent: int | None = None
+        while not self._closed:
+            number = backend.player_number(slot)
+            if number is not None and number != sent:
+                await self._send_json({"type": "event", "name": "player", "data": {"number": number}})
+                log.info("слот %d = игрок %d", slot, number)
+                sent = number
+            await asyncio.sleep(0.1 if sent is None else 0.5)
 
     async def _loop(self) -> None:
         assert self.slot is not None
@@ -289,8 +308,13 @@ class _Session:
         if self._closed:
             return
         self._closed = True
+        if self._player_watch is not None:
+            self._player_watch.cancel()
         if self.slot is not None:
             self.ctx.router.detach(self.slot)
+            # Остальные телефоны обновят список игроков. Не ждём: _release синхронный.
+            task = asyncio.ensure_future(self.ctx.bus.publish("devices", {}))
+            task.add_done_callback(_log_task_error)
         if self.device_id is not None and self.sessions.get(self.device_id) is self:
             del self.sessions[self.device_id]
         for task in list(self._tasks):

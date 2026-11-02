@@ -27,6 +27,15 @@ def recv_json(ws: Any) -> dict[str, Any]:
     return msg
 
 
+def welcome(ws: Any) -> dict[str, Any]:
+    "welcome, затем событие player (номер игрока) — оно приходит сразу после рукопожатия."
+    w = recv_json(ws)
+    assert w["type"] == "welcome"
+    player = recv_json(ws)
+    assert player["name"] == "player" and player["data"]["number"] == w["slot"] + 1
+    return w
+
+
 def expect_close(ws: Any, code: int) -> None:
     with pytest.raises(WebSocketDisconnect) as e:
         ws.receive_text()
@@ -46,7 +55,7 @@ def test_hello_welcome_and_pad_state(client: TestClient, ctx: AppContext, token:
     out = ctx.router.backend
     with client.websocket_connect("/ws") as ws:
         ws.send_text(hello(token))
-        w = recv_json(ws)
+        w = welcome(ws)
         assert w["type"] == "welcome" and w["slot"] == 0 and w["deadman_ms"] == 250
         state = PadState(buttons=0x1000 | 0x0001, lx=12000, ly=-5000, rt=255)
         ws.send_bytes(encode_pad(1, state, flags=1))
@@ -88,7 +97,7 @@ def test_hello_timeout(client: TestClient) -> None:
 def test_ping_gets_pong(client: TestClient, token: str) -> None:
     with client.websocket_connect("/ws") as ws:
         ws.send_text(hello(token))
-        recv_json(ws)
+        welcome(ws)
         ws.send_bytes(encode_ping(PING, 42, 123456))
         assert decode_ping(ws.receive_bytes()) == (PONG, 42, 123456)
 
@@ -96,7 +105,7 @@ def test_ping_gets_pong(client: TestClient, token: str) -> None:
 def test_server_pings_and_reports_stats(client: TestClient, token: str) -> None:
     with client.websocket_connect("/ws") as ws:
         ws.send_text(hello(token))
-        recv_json(ws)
+        welcome(ws)
         kind, ping_id, t_ms = decode_ping(ws.receive_bytes())  # сервер пингует раз в секунду
         assert kind == PING
         ws.send_bytes(encode_ping(PONG, ping_id, t_ms))
@@ -110,7 +119,7 @@ def test_server_pings_and_reports_stats(client: TestClient, token: str) -> None:
 def test_garbage_frames_do_not_break_connection(client: TestClient, ctx: AppContext, token: str) -> None:
     with client.websocket_connect("/ws") as ws:
         ws.send_text(hello(token))
-        recv_json(ws)
+        welcome(ws)
         ws.send_bytes(b"")
         ws.send_bytes(b"\x01\x00\x01")
         ws.send_bytes(b"\x7f" * 18)
@@ -124,7 +133,7 @@ def test_old_seq_dropped(client: TestClient, ctx: AppContext, token: str) -> Non
     a, b = PadState(buttons=0x1000), PadState(buttons=0x2000)
     with client.websocket_connect("/ws") as ws:
         ws.send_text(hello(token))
-        recv_json(ws)
+        welcome(ws)
         ws.send_bytes(encode_pad(10, a))
         ws.send_bytes(encode_pad(9, b))
         ws.send_bytes(encode_pad(11, a))
@@ -137,7 +146,7 @@ def test_deadman_over_ws(client: TestClient, ctx: AppContext, token: str) -> Non
     state = PadState(buttons=0x1000)
     with client.websocket_connect("/ws") as ws:
         ws.send_text(hello(token))
-        recv_json(ws)
+        welcome(ws)
         ws.send_bytes(encode_pad(1, state))
         assert wait_for(lambda: ctx.router.backend.states.get(0) == state)
         t0 = time.monotonic()
@@ -148,10 +157,10 @@ def test_deadman_over_ws(client: TestClient, ctx: AppContext, token: str) -> Non
 def test_same_device_reconnect_replaces_old(client: TestClient, ctx: AppContext, token: str) -> None:
     with client.websocket_connect("/ws") as old:
         old.send_text(hello(token))
-        assert recv_json(old)["slot"] == 0
+        assert welcome(old)["slot"] == 0
         with client.websocket_connect("/ws") as new:
             new.send_text(hello(token))
-            assert recv_json(new)["slot"] == 0
+            assert welcome(new)["slot"] == 0
             expect_close(old, 4000)
             assert len(ctx.router.slots()) == 1
 
@@ -161,7 +170,7 @@ def test_no_free_slot(client: TestClient, ctx: AppContext) -> None:
     tokens = [client.post("/api/v1/pair", json={"code": "123456"}).json()["token"] for _ in range(2)]
     with client.websocket_connect("/ws") as first:
         first.send_text(hello(tokens[0]))
-        recv_json(first)
+        welcome(first)
         with client.websocket_connect("/ws") as second:
             second.send_text(hello(tokens[1]))
             assert recv_json(second)["code"] == "no_free_slot"
@@ -171,7 +180,7 @@ def test_no_free_slot(client: TestClient, ctx: AppContext) -> None:
 def test_events_broadcast(client: TestClient, token: str) -> None:
     with client.websocket_connect("/ws") as ws:
         ws.send_text(hello(token))
-        recv_json(ws)
+        welcome(ws)
         client.post("/api/v1/games/1001/launch", headers={"Authorization": f"Bearer {token}"})
         msg = recv_json(ws)
         assert msg == {"type": "event", "name": "launch", "data": {"appid": 1001, "status": "launching"}}
@@ -180,6 +189,6 @@ def test_events_broadcast(client: TestClient, token: str) -> None:
 def test_rumble_forwarded(client: TestClient, ctx: AppContext, token: str) -> None:
     with client.websocket_connect("/ws") as ws:
         ws.send_text(hello(token))
-        recv_json(ws)
+        welcome(ws)
         ctx.router.backend.rumble(0, 200, 30)
         assert ws.receive_bytes() == bytes([0x10, 0, 200, 30])

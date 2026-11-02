@@ -31,6 +31,7 @@ let conn = null;
 let controls = null;
 let sendTimer = 0;
 let features = {};
+let playerNumber = null; // номер игрока в игре (событие player); до него показываем слот
 
 function fatal(text) {
   $('fatal-text').textContent = text;
@@ -80,7 +81,8 @@ $('pair-form').addEventListener('submit', (e) => {
 // --- геймпад ---
 function setStatus(kind, text) {
   $('status-dot').className = `dot ${kind}`;
-  $('status-text').textContent = text;
+  // После переподключения conn пишет «Слот N»; если номер игрока уже известен — он важнее.
+  $('status-text').textContent = kind === 'online' && playerNumber ? `Игрок ${playerNumber}` : text;
 }
 
 function sendNow() {
@@ -113,18 +115,25 @@ function onRumble({ large, small }) {
 }
 
 function startPad() {
+  playerNumber = null;
   show('screen-pad');
   if (!controls) controls = new PadControls($('screen-pad'), state, onPadChange);
   if (conn) conn.stop();
   conn = new Connection(getToken(), { platform: platform(), name: deviceName() }, {
     onStatus: setStatus,
-    onWelcome: () => {},
+    // Переподключение = новое виртуальное устройство: номер игрока может стать другим.
+    onWelcome: () => { playerNumber = null; },
     onStats: ({ rtt, serverRtt }) => {
       const v = rtt ?? serverRtt;
       if (v !== null && v !== undefined) $('rtt-text').textContent = `${Math.round(v)} мс`;
     },
     onEvent: (name, data) => {
       if (name === 'console_mode') renderConsole(data.state);
+      if (name === 'devices' && !$('menu').hidden) loadPlayers();
+      if (name === 'player' && Number.isInteger(data.number)) {
+        playerNumber = data.number;
+        setStatus('online', `Игрок ${playerNumber}`);
+      }
     },
     onRumble,
     onFatal: (code, text) => {
@@ -225,10 +234,37 @@ async function loadGames() {
   }
 }
 
+async function loadPlayers() {
+  if (!features.devices) return;
+  try {
+    const { devices } = await api.devices();
+    const names = devices.filter((d) => d.slot !== null).map((d) => d.name);
+    $('players').textContent = names.length ? `Подключены: ${names.join(', ')}` : '';
+  } catch (e) {
+    $('players').textContent = `Список игроков недоступен: ${e.message}`;
+  }
+}
+
+$('invite-btn').addEventListener('click', async () => {
+  const box = $('invite');
+  if (!box.hidden) { box.hidden = true; return; }
+  try {
+    const { code, expires_in_s: ttl } = await api.pairCode();
+    $('invite-code').textContent = code;
+    $('invite-link').textContent = `${location.origin}/#pair=${code}`;
+    $('invite-ttl').textContent = ttl === null ? '' : `Код действует ещё ${Math.ceil(ttl / 60)} мин и одноразовый`;
+    box.hidden = false;
+  } catch (e) {
+    $('console-msg').textContent = e.message;
+  }
+});
+
 function openMenu() {
   controls.releaseAll();
   $('menu').hidden = false;
+  $('invite').hidden = true;
   loadConsole();
+  loadPlayers();
   loadGames();
 }
 

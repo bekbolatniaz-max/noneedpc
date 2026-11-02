@@ -8,6 +8,7 @@ import importlib
 import importlib.util
 import logging
 import sys
+import threading
 from typing import Any
 
 from server.core.interfaces import OutputBackend, PadState
@@ -37,6 +38,9 @@ class VigemOutput(OutputBackend):
         self._vg = vg
         self._pads: dict[int, Any] = {}
         self._callbacks: dict[int, Any] = {}
+        self._owners: dict[int, object] = {}  # slot → маркер текущего устройства (для уведомлений)
+        self._leds: dict[int, int] = {}  # slot → led_number из последнего уведомления
+        self._lock = threading.Lock()  # уведомления драйвера приходят из его потока
         self._rumble = None
 
     @classmethod
@@ -60,16 +64,37 @@ class VigemOutput(OutputBackend):
 
     def open(self, slot: int) -> None:
         pad = self._module().VX360Gamepad()
+        # Маркер владельца вместо ссылки на pad: замыкание pad → callback → pad дало бы цикл,
+        # и виртуальное устройство исчезало бы из Windows только после сборки мусора.
+        owner = object()
 
         def on_notification(client: Any, target: Any, large_motor: int, small_motor: int,
                             led_number: int, user_data: Any) -> None:
-            # Поток драйвера: роутер перекинет в event loop (call_soon_threadsafe).
-            if self._rumble is not None:
-                self._rumble(slot, int(large_motor), int(small_motor))
+            # Поток драйвера. Проверка «это всё ещё устройство слота» и запись — под одним замком
+            # с close/open, иначе запоздавшее уведомление старого устройства достанется новому.
+            # Под замком только запись в dict и вызов роутера (он лишь ставит задачу в event loop).
+            with self._lock:
+                if self._owners.get(slot) is not owner:
+                    return
+                self._leds[slot] = int(led_number)
+                if self._rumble is not None:
+                    self._rumble(slot, int(large_motor), int(small_motor))
 
-        pad.register_notification(callback_function=on_notification)
-        self._pads[slot] = pad
-        self._callbacks[slot] = on_notification  # держим ссылку, иначе ctypes-callback соберёт GC
+        # Сначала регистрируем слот: первое уведомление (с номером игрока) может прийти сразу.
+        with self._lock:
+            self._pads[slot] = pad
+            self._owners[slot] = owner
+            self._callbacks[slot] = on_notification  # держим ссылку, иначе ctypes-callback соберёт GC
+        try:
+            pad.register_notification(callback_function=on_notification)
+        except Exception:
+            with self._lock:
+                self._pads.pop(slot, None)
+                self._owners.pop(slot, None)
+                self._callbacks.pop(slot, None)
+                self._leds.pop(slot, None)
+            del pad  # устройство удаляется из системы при сборке объекта
+            raise
         log.info("vigem: создан геймпад слота %d", slot)
 
     def apply(self, slot: int, state: PadState) -> None:
@@ -86,9 +111,21 @@ class VigemOutput(OutputBackend):
         r.sThumbRY = state.ry
         pad.update()
 
+    def player_number(self, slot: int) -> int | None:
+        """Номер игрока = led_number из уведомления драйвера + 1 (это XInput user index).
+
+        vigem_target_x360_get_user_index на практике всегда отвечает 0, поэтому ему не верим.
+        Уведомление приходит вскоре после open(), до этого номер неизвестен (None).
+        """
+        led = self._leds.get(slot)
+        return led + 1 if led is not None and 0 <= led <= 3 else None
+
     def close(self, slot: int) -> None:
-        pad = self._pads.pop(slot, None)
-        self._callbacks.pop(slot, None)
+        with self._lock:
+            pad = self._pads.pop(slot, None)
+            self._owners.pop(slot, None)
+            self._callbacks.pop(slot, None)
+            self._leds.pop(slot, None)
         if pad is None:
             return
         # Каждый шаг отдельно: сбой отпускания не должен оставить подписку на вибрацию.

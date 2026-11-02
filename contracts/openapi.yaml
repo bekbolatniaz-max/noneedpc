@@ -44,6 +44,16 @@ paths:
         "403": { $ref: "#/components/responses/Error" }
         "429": { $ref: "#/components/responses/Error" }
         "500": { $ref: "#/components/responses/Error" }
+  /pair/code:
+    get:
+      summary: Текущий код сопряжения — пригласить ещё одного игрока (только для сопряжённого устройства)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PairCode" }
+        "401": { $ref: "#/components/responses/Error" }
   /games:
     get:
       summary: Установленные игры
@@ -274,6 +284,17 @@ components:
       properties:
         token: { type: string, minLength: 32 }
         device_id: { type: string }
+
+    PairCode:
+      type: object
+      additionalProperties: false
+      required: [code, expires_in_s]
+      properties:
+        code: { type: string, pattern: "^[0-9]{6}$" }
+        expires_in_s:
+          type: ["integer", "null"]
+          minimum: 0
+          description: "Секунд до смены кода; null — постоянный код мок-сервера"
 
     Game:
       type: object

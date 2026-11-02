@@ -97,9 +97,17 @@
   <section id="menu" class="menu" hidden>
     <div class="menu-head">
       <button id="console-btn" class="primary">Приставка: …</button>
+      <button id="invite-btn" class="secondary">+ Игрок</button>
       <span id="console-msg" class="muted"></span>
       <button id="menu-close" class="ghost" aria-label="Закрыть">✕</button>
     </div>
+    <div id="invite" class="invite" hidden>
+      <div class="invite-code" id="invite-code"></div>
+      <div class="muted">На втором телефоне в той же Wi-Fi открой:</div>
+      <div class="invite-link" id="invite-link"></div>
+      <div class="muted" id="invite-ttl"></div>
+    </div>
+    <p id="players" class="muted"></p>
     <div id="games" class="games"></div>
     <p id="games-msg" class="muted"></p>
     <template id="game-tpl">

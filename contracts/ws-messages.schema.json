@@ -78,7 +78,7 @@
       "required": ["type", "name", "data"],
       "properties": {
         "type": { "const": "event" },
-        "name": { "enum": ["console_mode", "launch", "devices", "storage"] },
+        "name": { "enum": ["console_mode", "launch", "devices", "storage", "player"] },
         "data": { "type": "object" }
       }
     }

@@ -157,6 +157,11 @@ def create_app(ctx: AppContext) -> FastAPI:
         log.info("сопряжено устройство %s", device_id)  # токен не логируем
         return {"token": token, "device_id": device_id}
 
+    @app.get(f"{API}/pair/code")
+    def pair_code(_: Auth) -> dict[str, Any]:
+        code, expires_in = ctx.pairing.code_info()
+        return {"code": code, "expires_in_s": expires_in}
+
     @app.get(f"{API}/games")
     def games(_: Auth) -> dict[str, Any]:
         return {"games": [
