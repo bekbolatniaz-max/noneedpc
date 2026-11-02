@@ -220,7 +220,19 @@ class _Session:
             },
         })
         log.info("подключён %s, слот %d", name, slot)
+        self._spawn(self._announce_player(slot))
         return True
+
+    async def _announce_player(self, slot: int) -> None:
+        """Номер игрока ОС назначает не сразу после создания устройства — ждём до ~3 с."""
+        backend = self.ctx.router.backend
+        for _ in range(30):
+            number = backend.player_number(slot)
+            if number is not None:
+                await self._send_json({"type": "event", "name": "player", "data": {"number": number}})
+                log.info("слот %d = игрок %d", slot, number)
+                return
+            await asyncio.sleep(0.1)
 
     async def _loop(self) -> None:
         assert self.slot is not None

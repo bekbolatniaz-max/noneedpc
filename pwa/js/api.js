@@ -54,6 +54,8 @@ async function request(method, path, body, { auth = true, raw = false } = {}) {
 export const api = {
   info: () => request('GET', '/info', undefined, { auth: false }),
   pair: (code, deviceName) => request('POST', '/pair', { code, device_name: deviceName }, { auth: false }),
+  pairCode: () => request('GET', '/pair/code'),
+  devices: () => request('GET', '/devices'),
   games: () => request('GET', '/games'),
   // <img src> не умеет заголовки, поэтому обложка идёт через fetch → blob URL.
   cover: async (appid) => URL.createObjectURL(await (await request('GET', `/games/${appid}/cover`, undefined, { raw: true })).blob()),

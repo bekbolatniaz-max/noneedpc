@@ -37,6 +37,7 @@ class VigemOutput(OutputBackend):
         self._vg = vg
         self._pads: dict[int, Any] = {}
         self._callbacks: dict[int, Any] = {}
+        self._leds: dict[int, int] = {}  # slot → led_number из последнего уведомления
         self._rumble = None
 
     @classmethod
@@ -63,13 +64,17 @@ class VigemOutput(OutputBackend):
 
         def on_notification(client: Any, target: Any, large_motor: int, small_motor: int,
                             led_number: int, user_data: Any) -> None:
-            # Поток драйвера: роутер перекинет в event loop (call_soon_threadsafe).
+            # Поток драйвера: только запись в dict и вызов роутера (он перекинет в event loop).
+            if self._pads.get(slot) is not pad:
+                return  # уведомление от уже закрытого устройства этого слота
+            self._leds[slot] = int(led_number)
             if self._rumble is not None:
                 self._rumble(slot, int(large_motor), int(small_motor))
 
-        pad.register_notification(callback_function=on_notification)
+        # Сначала регистрируем слот: первое уведомление (с номером игрока) может прийти сразу.
         self._pads[slot] = pad
         self._callbacks[slot] = on_notification  # держим ссылку, иначе ctypes-callback соберёт GC
+        pad.register_notification(callback_function=on_notification)
         log.info("vigem: создан геймпад слота %d", slot)
 
     def apply(self, slot: int, state: PadState) -> None:
@@ -86,9 +91,19 @@ class VigemOutput(OutputBackend):
         r.sThumbRY = state.ry
         pad.update()
 
+    def player_number(self, slot: int) -> int | None:
+        """Номер игрока = led_number из уведомления драйвера + 1 (это XInput user index).
+
+        vigem_target_x360_get_user_index на практике всегда отвечает 0, поэтому ему не верим.
+        Уведомление приходит вскоре после open(), до этого номер неизвестен (None).
+        """
+        led = self._leds.get(slot)
+        return led + 1 if led is not None and 0 <= led <= 3 else None
+
     def close(self, slot: int) -> None:
         pad = self._pads.pop(slot, None)
         self._callbacks.pop(slot, None)
+        self._leds.pop(slot, None)
         if pad is None:
             return
         # Каждый шаг отдельно: сбой отпускания не должен оставить подписку на вибрацию.

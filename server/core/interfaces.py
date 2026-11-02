@@ -78,6 +78,10 @@ class OutputBackend(ABC):
     def close(self, slot: int) -> None:
         """Отпустить всё и удалить устройство слота."""
 
+    def player_number(self, slot: int) -> int | None:
+        """Номер игрока 1–4, который ОС/игра видит у устройства слота; None — неизвестен или неприменим."""
+        return None
+
     def shutdown(self) -> None:
         """Освободить ресурсы бэкенда целиком."""
 

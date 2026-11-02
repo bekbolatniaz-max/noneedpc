@@ -31,6 +31,9 @@ class MockOutput(OutputBackend):
         self.states[slot] = NEUTRAL
         self.opened.discard(slot)
 
+    def player_number(self, slot: int) -> int | None:
+        return slot + 1 if slot in self.opened else None
+
     def rumble(self, slot: int, large: int, small: int) -> None:
         """Имитация вибрации от игры (как callback ViGEm)."""
         if self._rumble is not None:

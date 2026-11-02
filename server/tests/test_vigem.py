@@ -73,6 +73,20 @@ def test_close_always_unregisters_even_if_update_fails(vg: SimpleNamespace) -> N
     assert FakePad.instances[0].unregistered
 
 
+def test_player_number_from_led_notification(vg: SimpleNamespace) -> None:
+    out = VigemOutput(vg)
+    out.open(0)
+    assert out.player_number(0) is None  # Windows ещё не назначил номер
+    pad = FakePad.instances[0]
+    pad.callback(None, None, 0, 0, 2, None)  # led_number = XInput index 2
+    assert out.player_number(0) == 3
+    out.close(0)
+    assert out.player_number(0) is None
+    pad.callback(None, None, 0, 0, 1, None)  # запоздавшее уведомление закрытого устройства
+    out.open(0)
+    assert out.player_number(0) is None
+
+
 def test_rumble_callback_reaches_router(vg: SimpleNamespace) -> None:
     out = VigemOutput(vg)
     router = InputRouter(out, max_slots=2)

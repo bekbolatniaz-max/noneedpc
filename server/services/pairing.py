@@ -65,6 +65,14 @@ class PairingService:
         with self._lock:
             return self._current_code()
 
+    def code_info(self) -> tuple[str, int | None]:
+        """(код, секунд до смены) — для приглашения игрока; None — постоянный код мока."""
+        with self._lock:
+            code = self._current_code()
+            if self._fixed is not None:
+                return code, None
+            return code, max(0, int(self._expires - self._clock()))
+
     def _current_code(self) -> str:
         if self._fixed is not None:
             return self._fixed
