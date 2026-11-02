@@ -70,19 +70,31 @@ button { font: inherit; color: inherit; border: 0; cursor: pointer; }
 .rtt { color: var(--muted); font-variant-numeric: tabular-nums; }
 
 .pad-area {
-  flex: 1; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
-  padding: 0 max(12px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr auto 1fr; grid-template-rows: minmax(0, 1fr);
+  padding: 4px max(12px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  /* Размеры под большой палец: стик и ABXY почти на половину высоты, D-pad поменьше.
+     dvh — видимая высота (в Safari vh больше экрана, пока видны панели браузера). */
+  --stick: min(48vh, 23vw); --dpad: min(36vh, 17vw);
 }
-.col { display: flex; flex-direction: column; align-items: center; justify-content: space-around; height: 100%; gap: 2vh; }
-.col.left { align-items: flex-start; }
-.col.right { align-items: flex-end; }
-.col.center { justify-content: center; gap: 4vh; }
-.col.left .dpad { margin-left: 16vw; }
-.col.right .stick { margin-right: 16vw; }
+@supports (height: 1dvh) {
+  .pad-area { --stick: min(48dvh, 23vw); --dpad: min(36dvh, 17vw); }
+}
+/* Как у Xbox: слева стик сверху и крестовина снизу, справа ABXY сверху и стик снизу.
+   Элементы разнесены по диагонали, поэтому оба могут быть крупными. */
+.col.left, .col.right { position: relative; }
+/* Размер от самой колонки (её ширины и высоты): на узком телефоне стик не налезает на ABXY. */
+@supports (width: 1cqw) {
+  .col.left, .col.right { container-type: size; --stick: min(58cqh, 50cqw); --dpad: min(44cqh, 38cqw); }
+}
+.col.left > *, .col.right > * { position: absolute; }
+.col.left .stick { top: 0; left: 0; }
+.col.left .dpad { bottom: 0; right: 0; }
+.col.right .abxy { top: 0; right: 0; }
+.col.right .stick { bottom: 0; left: 0; }
+.col.center { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4vh; padding: 0 8px; }
 
 .stick {
-  --size: min(36vh, 22vw);
-  width: var(--size); height: var(--size); border-radius: 50%;
+  width: var(--stick); height: var(--stick); border-radius: 50%;
   background: radial-gradient(circle, #1d2230 0 55%, #232936 56% 100%);
   display: grid; place-items: center; border: 2px solid #2c3342;
 }
@@ -93,22 +105,22 @@ button { font: inherit; color: inherit; border: 0; cursor: pointer; }
 }
 .stick.on .knob { background: var(--btn-on); }
 
-.dpad { --size: min(30vh, 18vw); position: relative; width: var(--size); height: var(--size); }
+.dpad { width: var(--dpad); height: var(--dpad); }
 .arm { position: absolute; background: var(--btn); border-radius: 8px; pointer-events: none; }
 .arm.up, .arm.down { left: 33%; width: 34%; height: 38%; }
 .arm.left, .arm.right { top: 33%; height: 34%; width: 38%; }
 .arm.up { top: 0; } .arm.down { bottom: 0; } .arm.left { left: 0; } .arm.right { right: 0; }
 .arm.on { background: var(--btn-on); }
 
-.abxy { --size: min(36vh, 22vw); position: relative; width: var(--size); height: var(--size); }
+.abxy { width: var(--stick); height: var(--stick); }
 .face {
-  position: absolute; width: 36%; height: 36%; border-radius: 50%; display: grid; place-items: center;
-  background: var(--btn); font-weight: 800; font-size: clamp(14px, 3.2vh, 22px);
+  position: absolute; width: 38%; height: 38%; border-radius: 50%; display: grid; place-items: center;
+  background: var(--btn); font-weight: 800; font-size: clamp(16px, 4.5vh, 28px);
 }
-.face.y { top: 0; left: 32%; color: var(--y); }
-.face.a { bottom: 0; left: 32%; color: var(--a); }
-.face.x { left: 0; top: 32%; color: var(--x); }
-.face.b { right: 0; top: 32%; color: var(--b); }
+.face.y { top: 0; left: 31%; color: var(--y); }
+.face.a { bottom: 0; left: 31%; color: var(--a); }
+.face.x { left: 0; top: 31%; color: var(--x); }
+.face.b { right: 0; top: 31%; color: var(--b); }
 
 .sys { display: flex; gap: 12px; }
 .small {
