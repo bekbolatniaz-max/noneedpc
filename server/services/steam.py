@@ -1,5 +1,6 @@
 """Steam: библиотеки, игры, обложки (только чтение манифестов) и запуск через steam:// URL."""
 
+import asyncio
 import logging
 import os
 import sys
@@ -41,6 +42,10 @@ def find_steam_path(configured: str | None = None) -> Path | None:
     return None
 
 
+def _same_path(a: Path, b: Path) -> bool:
+    return os.path.normcase(os.path.normpath(a)) == os.path.normcase(os.path.normpath(b))
+
+
 @dataclass(slots=True)
 class _Library:
     id: str
@@ -65,12 +70,16 @@ class SteamLibrary:
             return [_Library("lib-0", self.steam_path)]
         folders = data.get("libraryfolders") or data.get("LibraryFolders") or {}
         libs = []
-        for key, entry in folders.items():
-            # Новый формат: "1" { "path" "D:\\SteamLibrary" }; старый: "1" "D:\\SteamLibrary".
-            path = entry.get("path") if isinstance(entry, dict) else entry
-            if key.isdigit() and isinstance(path, str) and path:
-                libs.append(_Library(f"lib-{key}", Path(path)))
-        return libs or [_Library("lib-0", self.steam_path)]
+        if isinstance(folders, dict):
+            for key, entry in folders.items():
+                # Новый формат: "1" { "path" "D:\\SteamLibrary" }; старый: "1" "D:\\SteamLibrary".
+                path = entry.get("path") if isinstance(entry, dict) else entry
+                if key.isdigit() and isinstance(path, str) and path:
+                    libs.append(_Library(f"lib-{key}", Path(path)))
+        # В старом формате основная папка Steam не перечислена — она библиотека всегда.
+        if not any(_same_path(lib.path, self.steam_path) for lib in libs):
+            libs.insert(0, _Library("lib-0", self.steam_path))
+        return libs
 
     def _games_with_size(self) -> list[Game]:
         games: dict[int, Game] = {}
@@ -87,9 +96,11 @@ class SteamLibrary:
     def _parse_manifest(self, acf: Path, library_id: str) -> Game | None:
         try:
             state = vdf.loads(acf.read_text(encoding="utf-8", errors="replace")).get("AppState", {})
+            if not isinstance(state, dict):
+                raise ValueError("AppState не блок")
             appid = int(state["appid"])
             flags = int(state.get("StateFlags", "0"))
-        except (OSError, vdf.VdfError, KeyError, ValueError) as e:
+        except (OSError, vdf.VdfError, KeyError, ValueError, TypeError) as e:
             log.warning("пропущен манифест %s: %s", acf.name, e)
             return None
         if appid < 1 or appid in self.hidden or not flags & STATE_FULLY_INSTALLED:
@@ -97,7 +108,7 @@ class SteamLibrary:
         name = str(state.get("name") or f"App {appid}")
         try:
             size = max(0, int(state.get("SizeOnDisk", "0")))
-        except ValueError:
+        except (ValueError, TypeError):
             size = 0
         return Game(appid, name, library_id, size, True, self._cover_path(appid) is not None)
 
@@ -156,7 +167,8 @@ class SteamLauncher:
         self._last: dict[int, float] = {}  # appid → время последнего запуска
 
     async def launch(self, appid: int) -> None:
-        game = self._library.find(appid)
+        # Чтение манифестов и ShellExecute — в пуле потоков: event loop держит deadman 250 мс.
+        game = await asyncio.to_thread(self._library.find, appid)
         if game is None:
             raise NotFound(f"игра {appid} не установлена")
         if not game.available:
@@ -167,7 +179,7 @@ class SteamLauncher:
             raise Conflict("игра уже запускается")
         self._last[appid] = now
         try:
-            self._open(f"steam://rungameid/{int(appid)}")
+            await asyncio.to_thread(self._open, f"steam://rungameid/{int(appid)}")
         except OSError as e:
             raise Conflict(f"не удалось открыть Steam: {e}") from e
         log.info("запуск %s (%d)", game.name, appid)

@@ -58,6 +58,11 @@ class OutputBackend(ABC):
         """Есть ли драйвер/зависимости на этой машине. Не должен ничего устанавливать."""
         return True
 
+    @classmethod
+    def probe(cls) -> str | None:
+        """Проверка при старте, что бэкенд реально работает. None — да, иначе текст ошибки."""
+        return None
+
     def set_rumble_handler(self, handler: RumbleHandler | None) -> None:
         self._rumble = handler
 

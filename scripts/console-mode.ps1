@@ -39,16 +39,23 @@ function Step([string]$text, [scriptblock]$do) {
     $steps.Add($text)
 }
 
+function Get-ActiveSchemeGuid {
+    $out = (& powercfg /getactivescheme) -join ' '
+    $m = [regex]::Match($out, '[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}')
+    if (-not $m.Success) { throw 'cannot read active power scheme' }
+    return $m.Value
+}
+
 # powercfg output is localized; the last two hex values are the current AC and DC indexes.
-function Get-PowerAc([string]$sub, [string]$setting) {
-    $out = (& powercfg /query SCHEME_CURRENT $sub $setting) -join "`n"
+function Get-PowerAc([string]$scheme, [string]$sub, [string]$setting) {
+    $out = (& powercfg /query $scheme $sub $setting) -join "`n"
     $hex = [regex]::Matches($out, '0x[0-9a-fA-F]{8}') | ForEach-Object { $_.Value }
     if ($hex.Count -lt 2) { throw "cannot read powercfg $sub $setting" }
     return [Convert]::ToInt32($hex[$hex.Count - 2], 16)
 }
 
-function Set-PowerAc([string]$sub, [string]$setting, [int]$value) {
-    & powercfg /setacvalueindex SCHEME_CURRENT $sub $setting $value
+function Set-PowerAc([string]$scheme, [string]$sub, [string]$setting, [int]$value) {
+    & powercfg /setacvalueindex $scheme $sub $setting $value
     if ($LASTEXITCODE -ne 0) { throw "powercfg /setacvalueindex $sub $setting failed" }
 }
 
@@ -73,55 +80,69 @@ function Get-Topology([int]$screens, [int]$monitors) {
     return 'internal'
 }
 
-function Set-ActiveScheme {
-    & powercfg /setactive SCHEME_CURRENT
+function Set-ActiveScheme([string]$scheme) {
+    & powercfg /setactive $scheme
     if ($LASTEXITCODE -ne 0) { throw 'powercfg /setactive failed' }
 }
 
-$snapshotExists = Test-Path $SnapshotPath
+function Save-Snapshot($snap) {
+    New-Item -ItemType Directory -Force (Split-Path $SnapshotPath) | Out-Null
+    $snap | ConvertTo-Json | Set-Content -Encoding ascii $SnapshotPath
+}
+
+$snap = $null
+if (Test-Path $SnapshotPath) { $snap = Get-Content -Raw $SnapshotPath | ConvertFrom-Json }
 
 try {
     switch ($Action) {
         'status' {
-            Out-Result $true ($(if ($snapshotExists) { 'on' } else { 'off' })) ''
+            $state = $(if ($null -eq $snap) { 'off' } elseif ($snap.complete) { 'on' } else { 'error' })
+            Out-Result $true $state ($(if ($state -eq 'error') { 'interrupted switch: run on or off again' } else { '' }))
         }
         'on' {
-            if ($snapshotExists) { Out-Result $true 'on' 'already on' }
-            $screens = Get-ScreenCount
-            $monitors = Get-ActiveMonitorCount
-            if ([Math]::Max($screens, $monitors) -lt 2 -and -not $Force) {
-                Out-Result $false 'off' 'TV not detected (only one display). Connect HDMI or use -Force.'
+            if ($null -ne $snap -and $snap.complete) { Out-Result $true 'on' 'already on' }
+            if ($null -eq $snap) {
+                $screens = Get-ScreenCount
+                $monitors = Get-ActiveMonitorCount
+                if ([Math]::Max($screens, $monitors) -lt 2 -and -not $Force) {
+                    Out-Result $false 'off' 'TV not detected (only one display). Connect HDMI or use -Force.'
+                }
+                $scheme = Get-ActiveSchemeGuid
+                $snap = [pscustomobject][ordered]@{
+                    created      = (Get-Date).ToString('o')
+                    complete     = $false
+                    topology     = Get-Topology $screens $monitors
+                    scheme       = $scheme
+                    standby_ac_s = Get-PowerAc $scheme 'SUB_SLEEP' 'STANDBYIDLE'
+                    monitor_ac_s = Get-PowerAc $scheme 'SUB_VIDEO' 'VIDEOIDLE'
+                }
+                Step "save snapshot to $SnapshotPath (topology=$($snap.topology), scheme=$scheme, standby_ac=$($snap.standby_ac_s)s, monitor_ac=$($snap.monitor_ac_s)s)" {
+                    Save-Snapshot $snap
+                }
             }
-            $topology = Get-Topology $screens $monitors
-            $snapshot = [ordered]@{
-                created        = (Get-Date).ToString('o')
-                topology       = $topology
-                standby_ac_s   = Get-PowerAc 'SUB_SLEEP' 'STANDBYIDLE'
-                monitor_ac_s   = Get-PowerAc 'SUB_VIDEO' 'VIDEOIDLE'
-            }
-            Step "save snapshot to $SnapshotPath (topology=$topology, standby_ac=$($snapshot.standby_ac_s)s, monitor_ac=$($snapshot.monitor_ac_s)s)" {
-                New-Item -ItemType Directory -Force (Split-Path $SnapshotPath) | Out-Null
-                $snapshot | ConvertTo-Json | Set-Content -Encoding ascii $SnapshotPath
+            else {
+                # An earlier 'on' failed midway: keep the ORIGINAL values from the snapshot and finish.
+                $steps.Add("resume interrupted switch using existing snapshot (topology=$($snap.topology))")
             }
             Step 'display: TV only (DisplaySwitch /external)' { & DisplaySwitch.exe /external }
-            Step 'power (AC): never sleep, never turn off display' {
-                Set-PowerAc 'SUB_SLEEP' 'STANDBYIDLE' 0
-                Set-PowerAc 'SUB_VIDEO' 'VIDEOIDLE' 0
-                Set-ActiveScheme
+            Step "power (AC, scheme $($snap.scheme)): never sleep, never turn off display" {
+                Set-PowerAc $snap.scheme 'SUB_SLEEP' 'STANDBYIDLE' 0
+                Set-PowerAc $snap.scheme 'SUB_VIDEO' 'VIDEOIDLE' 0
+                Set-ActiveScheme $snap.scheme
             }
             Step 'open Steam Big Picture' { Start-Process 'steam://open/bigpicture' }
+            Step 'mark snapshot complete' { $snap.complete = $true; Save-Snapshot $snap }
             Out-Result $true ($(if ($DryRun) { 'off' } else { 'on' })) ''
         }
         'off' {
-            if (-not $snapshotExists) { Out-Result $true 'off' 'already off (no snapshot)' }
-            $snap = Get-Content -Raw $SnapshotPath | ConvertFrom-Json
+            if ($null -eq $snap) { Out-Result $true 'off' 'already off (no snapshot)' }
             $topology = [string]$snap.topology
             if ($topology -notin @('extend', 'clone', 'internal')) { throw "bad topology in snapshot: $topology" }
-            # Power first: if it fails we throw and the snapshot stays for a retry.
-            Step "power (AC): restore standby=$($snap.standby_ac_s)s, monitor=$($snap.monitor_ac_s)s" {
-                Set-PowerAc 'SUB_SLEEP' 'STANDBYIDLE' ([int]$snap.standby_ac_s)
-                Set-PowerAc 'SUB_VIDEO' 'VIDEOIDLE' ([int]$snap.monitor_ac_s)
-                Set-ActiveScheme
+            # Power first, into the ORIGINAL scheme: if it fails we throw and the snapshot stays for a retry.
+            Step "power (AC, scheme $($snap.scheme)): restore standby=$($snap.standby_ac_s)s, monitor=$($snap.monitor_ac_s)s" {
+                Set-PowerAc $snap.scheme 'SUB_SLEEP' 'STANDBYIDLE' ([int]$snap.standby_ac_s)
+                Set-PowerAc $snap.scheme 'SUB_VIDEO' 'VIDEOIDLE' ([int]$snap.monitor_ac_s)
+                Set-ActiveScheme $snap.scheme
             }
             Step 'close Steam Big Picture' { Start-Process 'steam://close/bigpicture' }
             # DisplaySwitch has no reliable exit code; the manual check verifies the result.

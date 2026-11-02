@@ -107,6 +107,11 @@ def create_app(ctx: AppContext) -> FastAPI:
     async def service_error(_: Request, exc: ServiceError) -> JSONResponse:
         return _error(exc.status, exc.message, exc.code)
 
+    @app.exception_handler(Exception)
+    async def unexpected_error(_: Request, exc: Exception) -> JSONResponse:
+        log.exception("необработанная ошибка: %r", exc)
+        return _error(500, "внутренняя ошибка сервера", "internal")
+
     def auth(authorization: Annotated[str | None, Header()] = None) -> PairedDevice:
         token = None
         if authorization and authorization.startswith("Bearer "):
@@ -147,7 +152,8 @@ def create_app(ctx: AppContext) -> FastAPI:
         try:
             token, device_id = ctx.pairing.pair(body.code, body.device_name)
         except PairingError as e:
-            return _error(429 if e.code == "rate_limited" else 403, e.message, e.code)
+            status = {"rate_limited": 429, "internal": 500}.get(e.code, 403)
+            return _error(status, e.message, e.code)
         log.info("сопряжено устройство %s", device_id)  # токен не логируем
         return {"token": token, "device_id": device_id}
 

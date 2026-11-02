@@ -43,6 +43,16 @@ class VigemOutput(OutputBackend):
     def available(cls) -> bool:
         return _driver_installed() and importlib.util.find_spec("vgamepad") is not None
 
+    @classmethod
+    def probe(cls) -> str | None:
+        """Создать и сразу удалить геймпад: ловит неработающую службу и ошибку загрузки DLL."""
+        try:
+            pad = importlib.import_module("vgamepad").VX360Gamepad()
+            del pad
+        except Exception as e:
+            return f"{type(e).__name__}: {e}"
+        return None
+
     def _module(self) -> Any:
         if self._vg is None:
             self._vg = importlib.import_module("vgamepad")

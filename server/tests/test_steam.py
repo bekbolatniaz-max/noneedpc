@@ -139,7 +139,15 @@ def test_old_libraryfolders_format(tmp_path: Path) -> None:
         f'"LibraryFolders"\n{{\n\t"TimeNextStatsReport"\t"1"\n\t"1"\t"{extra_esc}"\n}}\n',
         encoding="utf-8")
     (extra / "steamapps" / "appmanifest_42.acf").write_text(manifest(42, "Old"), encoding="utf-8")
-    assert [(g.appid, g.library_id) for g in SteamLibrary(root).games()] == [(42, "lib-1")]
+    (root / "steamapps" / "appmanifest_7.acf").write_text(manifest(7, "Main"), encoding="utf-8")
+    lib = SteamLibrary(root)
+    # основная папка Steam в старом формате не перечислена, но остаётся библиотекой
+    assert sorted((g.appid, g.library_id) for g in lib.games()) == [(7, "lib-0"), (42, "lib-1")]
+
+
+def test_malformed_appstate_is_skipped(steam: Path) -> None:
+    (steam / "steamapps" / "appmanifest_5.acf").write_text('"AppState" "broken"', encoding="utf-8")
+    assert 5 not in {g.appid for g in SteamLibrary(steam).games()}
 
 
 def test_negative_numbers_in_manifest(steam: Path) -> None:

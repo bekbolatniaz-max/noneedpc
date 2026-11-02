@@ -14,7 +14,7 @@ from pathlib import Path
 class PairingError(Exception):
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
-        self.code = code  # forbidden | rate_limited
+        self.code = code  # forbidden | rate_limited | internal
         self.message = message
 
 
@@ -98,20 +98,24 @@ class PairingService:
             self._rotate()  # одноразовый: сразу новый код для следующего телефона
         token = secrets.token_urlsafe(32)
         device_id = secrets.token_hex(8)
-        self._devices[device_id] = PairedDevice(device_id, device_name[:64], _hash(token))
-        self._save()
+        devices = {**self._devices, device_id: PairedDevice(device_id, device_name[:64], _hash(token))}
+        self._save(devices)  # сначала файл: при ошибке записи память не меняется
+        self._devices = devices
         return token, device_id
 
-    def _save(self) -> None:
+    def _save(self, devices: dict[str, PairedDevice]) -> None:
         if self._store is None:
             return
-        self._store.parent.mkdir(parents=True, exist_ok=True)
-        tmp = self._store.with_suffix(".tmp")
-        tmp.write_text(json.dumps([
-            {"device_id": d.device_id, "name": d.name, "token_hash": d.token_hash}
-            for d in self._devices.values()
-        ], ensure_ascii=False, indent=1), encoding="utf-8")
-        tmp.replace(self._store)
+        try:
+            self._store.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self._store.with_suffix(".tmp")
+            tmp.write_text(json.dumps([
+                {"device_id": d.device_id, "name": d.name, "token_hash": d.token_hash}
+                for d in devices.values()
+            ], ensure_ascii=False, indent=1), encoding="utf-8")
+            tmp.replace(self._store)
+        except OSError as e:
+            raise PairingError("internal", f"не удалось сохранить сопряжение: {e.strerror or e}") from e
 
     def verify(self, token: str | None) -> PairedDevice | None:
         if not token:
@@ -126,5 +130,6 @@ class PairingService:
 
     def revoke(self, device_id: str) -> None:
         with self._lock:
-            self._devices.pop(device_id, None)
-            self._save()
+            devices = {k: v for k, v in self._devices.items() if k != device_id}
+            self._save(devices)
+            self._devices = devices

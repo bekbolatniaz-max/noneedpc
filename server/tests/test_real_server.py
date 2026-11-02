@@ -79,6 +79,39 @@ def test_paired_devices_survive_restart(tmp_path: Path) -> None:
     assert PairingService(store_path=store).verify(token) is None
 
 
+def test_pair_save_failure_keeps_memory_consistent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    store = tmp_path / "paired.json"
+    p = PairingService(store_path=store)
+    token, device_id = p.pair(p.current_code())
+
+    def broken_replace(self: Path, target: Any) -> None:
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(Path, "replace", broken_replace)
+    from server.services.pairing import PairingError
+
+    with pytest.raises(PairingError) as e:
+        p.pair(p.current_code())
+    assert e.value.code == "internal" and len(p._devices) == 1
+    with pytest.raises(PairingError):
+        p.revoke(device_id)
+    assert p.verify(token) is not None  # память не разошлась с файлом
+
+
+def test_pair_endpoint_returns_contract_500(real: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    ctx, _, _ = real
+    from server.services.pairing import PairingError
+
+    def boom(code: str, name: str = "") -> Any:
+        raise PairingError("internal", "диск полон")
+
+    monkeypatch.setattr(ctx.pairing, "pair", boom)
+    with TestClient(create_app(ctx)) as client:
+        r = client.post("/api/v1/pair", json={"code": "123456"})
+        assert r.status_code == 500
+        assert check(r, "/pair", "post")["error"]["code"] == "internal"
+
+
 class FakeRunner:
     def __init__(self, result: dict[str, Any] | None, code: int = 0) -> None:
         self.calls: list[list[str]] = []
@@ -112,8 +145,10 @@ def test_console_mode_real_and_errors(tmp_path: Path) -> None:
         ok = FakeRunner({"ok": True, "state": "on", "steps": []})
         cm = ScriptConsoleMode(EventBus(), dry_run=False, snapshot_path=snap, runner=ok)
         await cm.set(True)
-        snap.write_text("{}")  # скрипт создал снимок
+        snap.write_text('{"complete": false}')  # прерванное переключение
         await cm._task
+        assert cm.status().state == "error"
+        snap.write_text('{"complete": true}')  # скрипт завершил снимок
         assert "-DryRun" not in ok.calls[0]
         assert cm.status().state == "on"
 

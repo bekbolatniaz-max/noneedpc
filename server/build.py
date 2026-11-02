@@ -35,10 +35,10 @@ def build_context(
 
     wanted = cfg["output"]["backend"]
     backend_cls = registry.get("output", wanted)
-    if not backend_cls.available():
+    problem = "нет драйвера/библиотеки" if not backend_cls.available() else backend_cls.probe()
+    if problem:
         warnings.append(
-            f"бэкенд вывода «{wanted}» недоступен (нет драйвера/библиотеки) — включён «mock»: "
-            "игры НЕ увидят геймпад"
+            f"бэкенд вывода «{wanted}» недоступен ({problem}) — включён «mock»: игры НЕ увидят геймпад"
         )
         backend_cls = registry.get("output", "mock")
     backend = backend_cls()

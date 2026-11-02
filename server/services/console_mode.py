@@ -73,9 +73,21 @@ class ScriptConsoleMode:
             return ConsoleModeStatus("switching", None)
         if self._error:
             return ConsoleModeStatus("error", None, self._error)
-        on = self._snapshot.is_file()
+        snap = self._read_snapshot()
+        if snap is not None and snap.get("complete") is not True:
+            return ConsoleModeStatus("error", None, "переключение прервано: повторите вкл. или выкл.")
+        on = snap is not None
         msg = "пробный режим (dry_run): система не меняется" if self._dry_run else None
         return ConsoleModeStatus("on" if on else "off", "default" if on else None, msg)
+
+    def _read_snapshot(self) -> dict[str, Any] | None:
+        try:
+            data = json.loads(self._snapshot.read_text(encoding="utf-8-sig"))
+        except FileNotFoundError:
+            return None
+        except (OSError, ValueError):
+            return {"complete": False}
+        return data if isinstance(data, dict) else {"complete": False}
 
     async def set(self, on: bool) -> ConsoleModeStatus:
         if self._switching:
