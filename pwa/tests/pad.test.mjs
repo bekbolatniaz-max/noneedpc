@@ -66,3 +66,21 @@ test('stick-independent buttons: A + D-pad combine and release separately', () =
   assert.equal(state.buttons, 0);
   assert.equal(state.touching, false);
 });
+
+test('touch gestures are blocked on controls (no iOS double-tap zoom), but not on buttons', () => {
+  const handlers = {};
+  const root = { addEventListener: (type, fn, opts) => { handlers[type] = { fn, opts }; } };
+  new PadControls(root, newPadState(), () => {});
+  const touch = (type, isButton) => {
+    let prevented = false;
+    const target = { closest: (sel) => (sel === 'button' && isButton ? {} : null) };
+    handlers[type].fn({ target, preventDefault() { prevented = true; } });
+    return prevented;
+  };
+  for (const type of ['touchstart', 'touchmove', 'touchend']) {
+    assert.equal(handlers[type].opts.passive, false, `${type} должен быть не passive`);
+    assert.equal(touch(type, false), true);
+    assert.equal(touch(type, true), false); // кнопка меню сохраняет click
+  }
+  for (const type of ['gesturestart', 'dblclick']) assert.equal(touch(type, false), true);
+});
