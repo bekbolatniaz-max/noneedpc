@@ -7,8 +7,8 @@ import socket
 
 import uvicorn
 
-from server.mock.build import build_mock_context
 from server.app import create_app
+from server.mock.build import build_mock_context
 
 
 def _lan_ip() -> str:

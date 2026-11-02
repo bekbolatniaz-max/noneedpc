@@ -50,8 +50,8 @@ def hello(token: str) -> dict[str, Any]:
     return {"type": "hello", "token": token, "protocol_version": 1}
 
 
-async def until(cond: Any, timeout: float = 1.0) -> None:
-    deadline = asyncio.get_running_loop().time() + timeout
+async def until(cond: Any, limit_s: float = 1.0) -> None:
+    deadline = asyncio.get_running_loop().time() + limit_s
     while not cond():
         assert asyncio.get_running_loop().time() < deadline, "условие не выполнилось"
         await asyncio.sleep(0.005)
@@ -217,6 +217,9 @@ def test_parse_hello_rejects_invalid(msg: Any) -> None:
 
 
 def test_parse_hello_accepts_valid() -> None:
-    ok = {"type": "hello", "token": "t", "protocol_version": 1, "client": {"platform": "ios", "name": "iPhone"}}
+    ok = {
+        "type": "hello", "token": "t", "protocol_version": 1,
+        "client": {"platform": "ios", "name": "iPhone"},
+    }
     assert parse_hello(json.dumps(ok)) == ok
     assert parse_hello("не json") is None and parse_hello(None) is None

@@ -1,3 +1,4 @@
+import contextlib
 import re
 import threading
 
@@ -66,10 +67,8 @@ def test_one_code_one_token_under_concurrency() -> None:
 
     def worker() -> None:
         barrier.wait()
-        try:
+        with contextlib.suppress(PairingError):
             tokens.append(p.pair(code)[0])
-        except PairingError:
-            pass
 
     threads = [threading.Thread(target=worker) for _ in range(16)]
     for t in threads:

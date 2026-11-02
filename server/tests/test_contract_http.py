@@ -152,7 +152,12 @@ def test_bad_appid_is_400_per_contract(client: TestClient, auth: dict[str, str],
 
 
 def test_power_requires_confirm(client: TestClient, ctx: Any, auth: dict[str, str]) -> None:
-    for body in ({"action": "shutdown"}, {"action": "shutdown", "confirm": False}, {"action": "x", "confirm": True}):
+    bad_bodies = (
+        {"action": "shutdown"},
+        {"action": "shutdown", "confirm": False},
+        {"action": "x", "confirm": True},
+    )
+    for body in bad_bodies:
         r = client.post("/api/v1/system/power", json=body, headers=auth)
         assert r.status_code == 400
         check(r, "/system/power", "post")

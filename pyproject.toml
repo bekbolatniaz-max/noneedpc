@@ -15,4 +15,5 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "SIM", "ASYNC"]
-ignore = ["B008"]
+# B027: пустые start/stop/shutdown в базовых классах — намеренно необязательные хуки плагинов
+ignore = ["B008", "B027"]

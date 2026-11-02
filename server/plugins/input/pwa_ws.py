@@ -167,7 +167,9 @@ class _Session:
             return False
         hello = parse_hello(msg.get("text"))
         if hello is None:
-            await self._fail("bad_message", "первым должно быть корректное текстовое hello", CLOSE_BAD_MESSAGE)
+            await self._fail(
+                "bad_message", "первым должно быть корректное текстовое hello", CLOSE_BAD_MESSAGE
+            )
             return False
         if hello["protocol_version"] != PROTOCOL_VERSION:
             await self._fail(
